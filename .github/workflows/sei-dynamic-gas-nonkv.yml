@@ -1,0 +1,107 @@
+name: sei-dynamic-gas-nonkv-local-ci
+
+on:
+  push:
+    branches:
+      - tmp-sei-dynamic-gas-ci-20261102
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  dynamic-gas-poc:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      BASELINE: f70ea4fea2dbb6145bec697e86140940ff310030
+      GOTOOLCHAIN: auto
+      CAND_SEI_VARIANTS: '32'
+      TEST_GZ_B64: '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'
+    steps:
+      - name: Checkout CI payload
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version: '1.27.3'
+          cache: false
+
+      - name: Install native build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential pkg-config time \
+            librocksdb-dev libsnappy-dev liblz4-dev libzstd-dev \
+            zlib1g-dev libbz2-dev libgflags-dev libjemalloc-dev
+
+      - name: Fetch exact Sei baseline/current main
+        run: |
+          set -euxo pipefail
+          mkdir sei-chain
+          cd sei-chain
+          git init
+          git remote add origin https://github.com/sei-protocol/sei-chain.git
+          git fetch --depth=1 origin "$BASELINE"
+          git checkout --detach FETCH_HEAD
+          test "$(git rev-parse HEAD)" = "$BASELINE"
+          go version
+
+      - name: Materialize local-only benchmark
+        run: |
+          set -euxo pipefail
+          mkdir -p evidence/CAND-SEI-DYNAMIC-GAS-NONKV-001 tmp-root
+          printf '%s' "$TEST_GZ_B64" | base64 -d | gzip -d > sei-chain/precompiles/wasmd/cand_sei_dynamic_gas_nonkv_test.go
+          cp tmp/sei-dynamic/cand_sei_dynamic_metrics.go sei-chain/sei-wasmd/x/wasm/keeper/
+          gofmt -w \
+            sei-chain/precompiles/wasmd/cand_sei_dynamic_gas_nonkv_test.go \
+            sei-chain/sei-wasmd/x/wasm/keeper/cand_sei_dynamic_metrics.go
+          git -C sei-chain diff --check
+          git -C sei-chain diff -- \
+            precompiles/wasmd/cand_sei_dynamic_gas_nonkv_test.go \
+            sei-wasmd/x/wasm/keeper/cand_sei_dynamic_metrics.go \
+            > evidence/CAND-SEI-DYNAMIC-GAS-NONKV-001/applied.diff
+
+      - name: Compile and run production-path probe
+        env:
+          TMPDIR: ${{ github.workspace }}/tmp-root
+          CAND_SEI_TMP_ROOT: ${{ github.workspace }}/tmp-root
+          CAND_SEI_EVIDENCE_DIR: ${{ github.workspace }}/evidence/CAND-SEI-DYNAMIC-GAS-NONKV-001
+        run: |
+          set -o pipefail
+          cd sei-chain
+          /usr/bin/time -v go test ./precompiles/wasmd \
+            -run '^TestCANDSEIDynamicGasNonKV001$' \
+            -count=1 -v -timeout=75m \
+            2>&1 | tee "$GITHUB_WORKSPACE/evidence/CAND-SEI-DYNAMIC-GAS-NONKV-001/go-test.log"
+
+      - name: Preserve diagnostics
+        if: always()
+        run: |
+          mkdir -p evidence/CAND-SEI-DYNAMIC-GAS-NONKV-001
+          {
+            echo "baseline=$BASELINE"
+            echo "variants=$CAND_SEI_VARIANTS"
+            echo "runner_os=$RUNNER_OS"
+            echo "runner_arch=$RUNNER_ARCH"
+            date -u +'%Y-%m-%dT%H:%M:%SZ'
+            git -C sei-chain rev-parse HEAD || true
+            git -C sei-chain status --short || true
+          } > evidence/CAND-SEI-DYNAMIC-GAS-NONKV-001/ci-meta.txt
+          uname -a > evidence/CAND-SEI-DYNAMIC-GAS-NONKV-001/uname.txt || true
+          lscpu > evidence/CAND-SEI-DYNAMIC-GAS-NONKV-001/lscpu.txt || true
+          free -h > evidence/CAND-SEI-DYNAMIC-GAS-NONKV-001/memory.txt || true
+          df -h > evidence/CAND-SEI-DYNAMIC-GAS-NONKV-001/disk.txt || true
+          go version > evidence/CAND-SEI-DYNAMIC-GAS-NONKV-001/go-version.txt || true
+          cp sei-chain/precompiles/wasmd/cand_sei_dynamic_gas_nonkv_test.go evidence/CAND-SEI-DYNAMIC-GAS-NONKV-001/ || true
+          cp sei-chain/sei-wasmd/x/wasm/keeper/cand_sei_dynamic_metrics.go evidence/CAND-SEI-DYNAMIC-GAS-NONKV-001/ || true
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: CAND-SEI-DYNAMIC-GAS-NONKV-001-evidence
+          path: evidence/CAND-SEI-DYNAMIC-GAS-NONKV-001
+          if-no-files-found: error
+          retention-days: 7
