@@ -53,6 +53,9 @@ jobs:
           mkdir -p evidence/CAND-SEI-DYNAMIC-GAS-NONKV-001-TXFRAME tmp-root
           cp tmp/sei-dynamic-txframe/cand_sei_dynamic_txframe_test.go sei-chain/precompiles/wasmd/
           cp tmp/sei-dynamic/cand_sei_dynamic_metrics.go sei-chain/sei-wasmd/x/wasm/keeper/
+          sed -i '/^[[:space:]]*"runtime"$/d' sei-chain/precompiles/wasmd/cand_sei_dynamic_txframe_test.go
+          sed -i 's/result.ObservedFSLoads = metricsAfter.HitsFsCache - metricsBefore.HitsFsCache/result.ObservedFSLoads = uint64(metricsAfter.HitsFsCache - metricsBefore.HitsFsCache)/' \
+            sei-chain/precompiles/wasmd/cand_sei_dynamic_txframe_test.go
           gofmt -w \
             sei-chain/precompiles/wasmd/cand_sei_dynamic_txframe_test.go \
             sei-chain/sei-wasmd/x/wasm/keeper/cand_sei_dynamic_metrics.go
