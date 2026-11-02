@@ -1,0 +1,109 @@
+name: sei-v68-wasm-killswitch-gate
+
+on:
+  push:
+    branches:
+      - tmp-sei-dynamic-gas-ci-20261102
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  killswitch-gate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      BASELINE: f70ea4fea2dbb6145bec697e86140940ff310030
+      GOTOOLCHAIN: auto
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version: '1.27.3'
+          cache: false
+
+      - name: Install native build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential pkg-config time \
+            librocksdb-dev libsnappy-dev liblz4-dev libzstd-dev \
+            zlib1g-dev libbz2-dev libgflags-dev libjemalloc-dev
+
+      - name: Fetch exact Sei current main/baseline
+        run: |
+          set -euxo pipefail
+          mkdir sei-chain
+          cd sei-chain
+          git init
+          git remote add origin https://github.com/sei-protocol/sei-chain.git
+          git fetch --depth=1 origin "$BASELINE"
+          git checkout --detach FETCH_HEAD
+          test "$(git rev-parse HEAD)" = "$BASELINE"
+
+      - name: Run real DeliverTx direct plus authz gate
+        run: |
+          set -o pipefail
+          mkdir -p evidence/CAND-SEI-WASM-KILLSWITCH-001
+          cd sei-chain
+          /usr/bin/time -v go test ./app \
+            -run '^TestMsgExecuteContractDisabledInDeliverTx$' \
+            -count=1 -v -timeout=45m \
+            2>&1 | tee ../evidence/CAND-SEI-WASM-KILLSWITCH-001/app-authz.log
+
+      - name: Run keeper origin and entry-point matrix
+        run: |
+          set -o pipefail
+          cd sei-chain
+          /usr/bin/time -v go test ./sei-wasmd/x/wasm/keeper \
+            -run '^(TestContractExecutionDisabled|TestContractExecutionDisabledLeavesQueriesOpen)$' \
+            -count=1 -v -timeout=45m \
+            2>&1 | tee ../evidence/CAND-SEI-WASM-KILLSWITCH-001/keeper-matrix.log
+
+      - name: Run production EVM wasmd precompile gate
+        run: |
+          set -o pipefail
+          cd sei-chain
+          /usr/bin/time -v go test ./precompiles/wasmd \
+            -run '^TestContractExecutionDisabled$' \
+            -count=1 -v -timeout=45m \
+            2>&1 | tee ../evidence/CAND-SEI-WASM-KILLSWITCH-001/evm-precompile.log
+
+      - name: Run nested-origin and solo reachability controls
+        run: |
+          set -o pipefail
+          cd sei-chain
+          /usr/bin/time -v go test ./precompiles/solo \
+            -run '^(TestPrecompileExecutor|TestValidate.*|Test.*Cosmos.*Entry.*)$' \
+            -count=1 -v -timeout=45m \
+            2>&1 | tee ../evidence/CAND-SEI-WASM-KILLSWITCH-001/solo-controls.log || true
+          grep -nE 'wasmKeeper.Execute|EVMEntryViaWasmdPrecompile|cannot claim from cosmos entry' precompiles/solo/solo.go precompiles/solo/solo_test.go \
+            > ../evidence/CAND-SEI-WASM-KILLSWITCH-001/solo-reachability.txt
+          grep -nE 'contractExecutionDisabled|ErrContractExecutionDisabled|func \(k Keeper\) (instantiate|execute|migrate|Sudo|reply)' \
+            sei-wasmd/x/wasm/keeper/keeper.go \
+            > ../evidence/CAND-SEI-WASM-KILLSWITCH-001/keeper-guards.txt
+
+      - name: Preserve metadata
+        if: always()
+        run: |
+          mkdir -p evidence/CAND-SEI-WASM-KILLSWITCH-001
+          {
+            echo "baseline=$BASELINE"
+            date -u +'%Y-%m-%dT%H:%M:%SZ'
+            git -C sei-chain rev-parse HEAD || true
+            git -C sei-chain status --short || true
+          } > evidence/CAND-SEI-WASM-KILLSWITCH-001/ci-meta.txt
+          uname -a > evidence/CAND-SEI-WASM-KILLSWITCH-001/uname.txt || true
+          lscpu > evidence/CAND-SEI-WASM-KILLSWITCH-001/lscpu.txt || true
+          go version > evidence/CAND-SEI-WASM-KILLSWITCH-001/go-version.txt || true
+
+      - name: Upload gate evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: CAND-SEI-WASM-KILLSWITCH-001-evidence
+          path: evidence/CAND-SEI-WASM-KILLSWITCH-001
+          if-no-files-found: error
+          retention-days: 7
