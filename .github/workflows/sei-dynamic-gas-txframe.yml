@@ -1,0 +1,102 @@
+name: sei-dynamic-gas-single-message-ci
+
+on:
+  push:
+    branches:
+      - tmp-sei-dynamic-txframe-ci-20261102
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  txframe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      BASELINE: f70ea4fea2dbb6145bec697e86140940ff310030
+      GOTOOLCHAIN: auto
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version: '1.27.3'
+          cache: false
+
+      - name: Install native and compiler dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential pkg-config time \
+            librocksdb-dev libsnappy-dev liblz4-dev libzstd-dev \
+            zlib1g-dev libbz2-dev libgflags-dev libjemalloc-dev
+          cd tmp/sei-dynamic-txframe
+          npm init -y >/dev/null 2>&1
+          npm install --no-audit --no-fund --save-exact solc@0.8.30
+          node compile.js BatchWasmdQuery.sol compiled | tee compiler-meta.json
+
+      - name: Fetch exact Sei baseline/current main
+        run: |
+          set -euxo pipefail
+          mkdir sei-chain
+          cd sei-chain
+          git init
+          git remote add origin https://github.com/sei-protocol/sei-chain.git
+          git fetch --depth=1 origin "$BASELINE"
+          git checkout --detach FETCH_HEAD
+          test "$(git rev-parse HEAD)" = "$BASELINE"
+
+      - name: Materialize benchmark
+        run: |
+          set -euxo pipefail
+          mkdir -p evidence/CAND-SEI-DYNAMIC-GAS-NONKV-001-TXFRAME tmp-root
+          cp tmp/sei-dynamic-txframe/cand_sei_dynamic_txframe_test.go sei-chain/precompiles/wasmd/
+          cp tmp/sei-dynamic/cand_sei_dynamic_metrics.go sei-chain/sei-wasmd/x/wasm/keeper/
+          gofmt -w \
+            sei-chain/precompiles/wasmd/cand_sei_dynamic_txframe_test.go \
+            sei-chain/sei-wasmd/x/wasm/keeper/cand_sei_dynamic_metrics.go
+          git -C sei-chain diff --check
+
+      - name: Compile and run single-message probe
+        env:
+          TMPDIR: ${{ github.workspace }}/tmp-root
+          CAND_SEI_EVIDENCE_DIR: ${{ github.workspace }}/evidence/CAND-SEI-DYNAMIC-GAS-NONKV-001-TXFRAME
+          CAND_SEI_WRAPPER_RUNTIME: ${{ github.workspace }}/tmp/sei-dynamic-txframe/compiled/BatchWasmdQuery.runtime.bin
+          CAND_SEI_WRAPPER_ABI: ${{ github.workspace }}/tmp/sei-dynamic-txframe/compiled/BatchWasmdQuery.abi.json
+        run: |
+          set -o pipefail
+          cd sei-chain
+          /usr/bin/time -v go test ./precompiles/wasmd \
+            -run '^TestCANDSEIDynamicGasSingleEVMMessage$' \
+            -count=1 -v -timeout=100m \
+            2>&1 | tee "$GITHUB_WORKSPACE/evidence/CAND-SEI-DYNAMIC-GAS-NONKV-001-TXFRAME/go-test.log"
+
+      - name: Preserve evidence
+        if: always()
+        run: |
+          mkdir -p evidence/CAND-SEI-DYNAMIC-GAS-NONKV-001-TXFRAME
+          cp tmp/sei-dynamic-txframe/BatchWasmdQuery.sol evidence/CAND-SEI-DYNAMIC-GAS-NONKV-001-TXFRAME/ || true
+          cp tmp/sei-dynamic-txframe/compile.js evidence/CAND-SEI-DYNAMIC-GAS-NONKV-001-TXFRAME/ || true
+          cp tmp/sei-dynamic-txframe/compiler-meta.json evidence/CAND-SEI-DYNAMIC-GAS-NONKV-001-TXFRAME/ || true
+          cp tmp/sei-dynamic-txframe/compiled/* evidence/CAND-SEI-DYNAMIC-GAS-NONKV-001-TXFRAME/ || true
+          cp sei-chain/precompiles/wasmd/cand_sei_dynamic_txframe_test.go evidence/CAND-SEI-DYNAMIC-GAS-NONKV-001-TXFRAME/ || true
+          cp sei-chain/sei-wasmd/x/wasm/keeper/cand_sei_dynamic_metrics.go evidence/CAND-SEI-DYNAMIC-GAS-NONKV-001-TXFRAME/ || true
+          {
+            echo "baseline=$BASELINE"
+            date -u +'%Y-%m-%dT%H:%M:%SZ'
+            git -C sei-chain rev-parse HEAD || true
+          } > evidence/CAND-SEI-DYNAMIC-GAS-NONKV-001-TXFRAME/ci-meta.txt
+          uname -a > evidence/CAND-SEI-DYNAMIC-GAS-NONKV-001-TXFRAME/uname.txt || true
+          lscpu > evidence/CAND-SEI-DYNAMIC-GAS-NONKV-001-TXFRAME/lscpu.txt || true
+          free -h > evidence/CAND-SEI-DYNAMIC-GAS-NONKV-001-TXFRAME/memory.txt || true
+          go version > evidence/CAND-SEI-DYNAMIC-GAS-NONKV-001-TXFRAME/go-version.txt || true
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: CAND-SEI-DYNAMIC-GAS-NONKV-001-txframe-evidence
+          path: evidence/CAND-SEI-DYNAMIC-GAS-NONKV-001-TXFRAME
+          if-no-files-found: error
+          retention-days: 7
